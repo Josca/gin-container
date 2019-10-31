@@ -1,0 +1,101 @@
+kind: Template
+apiVersion: v1
+metadata:
+  name: gin-container
+  annotations:
+    description: An example Gin Gonic (http://beego.me/) application written in Golang
+    tags: quickstart,golang
+    iconClass: icon-go-gopher
+labels:
+  template: gin-container
+  app: gin-container
+objects:
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: gin-container
+    annotations:
+      description: Exposes and load balances the application pods
+  spec:
+    ports:
+    - name: web
+      port: 8080
+      targetPort: 8080
+    selector:
+      name: gin-container
+
+- kind: ImageStream
+  apiVersion: v1
+  metadata:
+    name: gin-container
+    annotations:
+      description: Keeps track of changes in the application image
+
+- kind: BuildConfig
+  apiVersion: v1
+  metadata:
+    name: gin-container
+    annotations:
+      description: Defines how to build the application
+  spec:
+    source:
+      type: Git
+      git:
+        uri: ${SOURCE_REPOSITORY_URL}
+        ref: ${SOURCE_REPOSITORY_REF}
+      contextDir: ${CONTEXT_DIR}
+    strategy:
+      type: Docker
+    output:
+      to:
+        kind: ImageStreamTag
+        name: gin-container:latest
+    triggers:
+    - type: ConfigChange
+    postCommit:
+      script: go test -v ./...
+
+- kind: DeploymentConfig
+  apiVersion: v1
+  metadata:
+    name: gin-container
+    annotations:
+      description: Defines how to deploy the application server
+  spec:
+    replicas: 1
+    selector:
+      name: gin-container
+    template:
+      metadata:
+        name: gin-container
+        labels:
+          name: gin-container
+      spec:
+        containers:
+        - name: gin-container
+          image: gin-container
+          ports:
+          - containerPort: 8080
+    strategy:
+      type: Recreate
+    triggers:
+    - type: ImageChange
+      imageChangeParams:
+        automatic: true
+        containerNames:
+        - gin-container
+        from:
+          kind: ImageStreamTag
+          name: gin-container:latest
+    - type: ConfigChange
+
+parameters:
+- name: SOURCE_REPOSITORY_URL
+  description: The URL of the repository with your application source code
+  value: https://github.com/Josca/gin-container.git
+- name: SOURCE_REPOSITORY_REF
+  description: Set this to a branch name, tag or other ref of your repository if you
+    are not using the default branch
+- name: CONTEXT_DIR
+  description: Set this to the relative path to your project if it is not in the root
+    of your repository
